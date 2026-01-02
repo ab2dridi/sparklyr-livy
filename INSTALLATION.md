@@ -1,6 +1,6 @@
 # Installation Guide
 
-Complete step-by-step guide to install and configure sparklyr-livy for Knox Gateway and Livy connections on air-gapped Cloudera clusters.
+Complete step-by-step guide to install and configure sparklyr-livy for Knox Gateway and Livy connections on air-gapped Cloudera CDP 7.1.9 clusters (Spark 3.3.2).
 
 ---
 

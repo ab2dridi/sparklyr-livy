@@ -1,10 +1,10 @@
 # sparklyr-livy
 
-Solution to connect R (sparklyr) to Apache Spark via Knox Gateway and Livy on air-gapped Cloudera CDP clusters.
+Solution to connect R (sparklyr) to Apache Spark via Knox Gateway and Livy on air-gapped Cloudera CDP 7.1.9 clusters (Spark 3.3.2).
 
 ## The Problem
 
-Standard sparklyr fails to connect to Livy through Knox Gateway on air-gapped Cloudera clusters due to three issues:
+Standard sparklyr fails to connect to Livy through Knox Gateway on air-gapped Cloudera CDP 7.1.9 clusters due to three issues:
 
 1. **httr library incompatibility with Knox** - The R `httr` package returns empty responses when communicating through Knox Gateway
 2. **Missing proxyUser** - Spark sessions run as 'livy' user instead of the authenticated Knox user, causing permission errors

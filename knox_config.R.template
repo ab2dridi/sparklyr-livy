@@ -1,69 +1,72 @@
-# ============================================================================
-# CONFIGURATION KNOX - NE PAS COMMITER CE FICHIER !
-# ============================================================================
-# Copiez ce fichier en knox_config.R et remplissez vos informations
-# Ajoutez knox_config.R à .gitignore pour protéger vos credentials
+# ==============================================================================
+# KNOX CONFIGURATION - DO NOT COMMIT THIS FILE!
+# ==============================================================================
+# Copy this file to knox_config.R and fill in your information
+# Add knox_config.R to .gitignore to protect your credentials
 
-# ============================================================================
-# CREDENTIALS KNOX
-# ============================================================================
+# ==============================================================================
+# KNOX CREDENTIALS
+# ==============================================================================
 
-KNOX_USERNAME <- "votre_username"
-KNOX_PASSWORD <- "votre_password"
+KNOX_USERNAME <- "your_username"
+KNOX_PASSWORD <- "your_password"
 
-# ============================================================================
-# URLS KNOX
-# ============================================================================
+# ==============================================================================
+# KNOX URLS (Cloudera CDP 7.1.9)
+# ==============================================================================
 
-# URL Livy pour la connexion Spark
-# Adaptez hostname_knox et port_knox selon votre cluster
-KNOX_MASTER_URL <- "https://hostname_knox:port_knox/gateway/cdp-proxy-api/livy_for_spark3"
+# Livy URL for Spark connection
+# Adapt knox_hostname and knox_port according to your cluster
+KNOX_MASTER_URL <- "https://knox_hostname:knox_port/gateway/cdp-proxy-api/livy_for_spark3"
 
-# URL WebHDFS pour l'upload du JAR (utilise les mêmes credentials)
-KNOX_WEBHDFS_URL <- "https://hostname_knox:port_knox/gateway/cdp-proxy-api/webhdfs/v1"
+# WebHDFS URL for JAR upload (uses the same credentials)
+KNOX_WEBHDFS_URL <- "https://knox_hostname:knox_port/gateway/cdp-proxy-api/webhdfs/v1"
 
-# ============================================================================
-# CONFIGURATION SPARK SESSION
-# ============================================================================
+# ==============================================================================
+# SPARK SESSION CONFIGURATION
+# ==============================================================================
 
-# Mémoire du driver (ex: "4G", "8G", "16G")
+# Driver memory (e.g., "4G", "8G", "16G")
 SPARK_DRIVER_MEMORY <- "4G"
 
-# Mémoire par exécuteur (ex: "4G", "8G")
+# Memory per executor (e.g., "4G", "8G")
 SPARK_EXECUTOR_MEMORY <- "4G"
 
-# Nombre d'exécuteurs (ex: 2, 4, 8)
+# Number of executors (e.g., 2, 4, 8)
 SPARK_NUM_EXECUTORS <- 2
 
-# Cœurs par exécuteur (ex: 2, 4)
+# Cores per executor (e.g., 2, 4)
 SPARK_EXECUTOR_CORES <- 2
 
-# Queue YARN (ex: "default", "production", "data-science")
+# YARN queue (e.g., "default", "production", "data-science")
 SPARK_QUEUE <- "default"
 
-# Timeout de connexion en secondes (300 = 5 minutes)
+# Connection timeout in seconds (300 = 5 minutes)
 SPARK_CONNECT_TIMEOUT <- 300
 
-# ============================================================================
-# CHEMIN DU JAR SPARKLYR
-# ============================================================================
+# ==============================================================================
+# SPARKLYR JAR PATH
+# ==============================================================================
 
-# Ce chemin sera configuré automatiquement par setup_sparklyr_jar.R
-# NE LE MODIFIEZ PAS MANUELLEMENT sauf si vous avez uploadé le JAR vous-même
+# This path will be configured automatically by setup_jar.R
+# DO NOT MODIFY MANUALLY unless you uploaded the JAR yourself
+# Examples:
+#   SPARKLYR_JAR_PATH <- "hdfs:///user/your_username/sparklyr/sparklyr-3.0-2.12.jar"
+#   SPARKLYR_JAR_PATH <- "hdfs:///user/your_username/sparklyr/sparklyr-3.5-2.12.jar"
 SPARKLYR_JAR_PATH <- ""
 
-# ============================================================================
+# ==============================================================================
 # INSTRUCTIONS
-# ============================================================================
+# ==============================================================================
 #
-# 1. Copiez ce fichier : cp knox_config.R.template knox_config.R
-# 2. Éditez knox_config.R avec vos vraies informations
-# 3. Lancez l'installation du JAR : source("setup_sparklyr_jar.R")
-# 4. Connectez-vous à Spark : source("knox_debug_full_en.R")
-# 5. Testez avec les exemples : source("exemples_sparklyr.R")
+# 1. Copy this file: cp knox_config.R.template knox_config.R
+# 2. Edit knox_config.R with your actual information
+# 3. Run JAR installation: source("setup_jar.R")
+# 4. Connect to Spark: source("sparklyr_connection.R")
+# 5. Test with examples: source("examples/basic_examples.R")
 #
-# ⚠️ N'oubliez pas d'ajouter knox_config.R à votre .gitignore !
+# ⚠️ Don't forget to add knox_config.R to your .gitignore!
 #
 
-# Option 3: If you found an existing JAR on the cluster
+# Alternative: If you found an existing JAR on the cluster
 # SPARKLYR_JAR_PATH <- "file:///opt/cloudera/parcels/CDH/jars/sparklyr-3.0-2.12.jar"

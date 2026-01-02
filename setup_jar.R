@@ -1,332 +1,287 @@
-# ============================================================================
-# INSTALLATION DU JAR SPARKLYR VIA WEBHDFS
-# ============================================================================
-# Ce script télécharge et installe le JAR sparklyr sur HDFS via WebHDFS
-# WebHDFS utilise les mêmes credentials Knox que la connexion Livy
+# ==============================================================================
+# SPARKLYR JAR INSTALLATION VIA WEBHDFS
+# ==============================================================================
+# This script downloads and installs the sparklyr JAR on HDFS via WebHDFS
+# WebHDFS uses the same Knox credentials as the Livy connection
 
 library(jsonlite)
 
-cat("╔═══════════════════════════════════════════════════════════════════╗\n")
-cat("║          INSTALLATION JAR SPARKLYR VIA WEBHDFS                    ║\n")
-cat("╚═══════════════════════════════════════════════════════════════════╝\n\n")
+cat("╔══════════════════════════════════════════════════════════════════╗\n")
+cat("║          SPARKLYR JAR INSTALLATION VIA WEBHDFS                  ║\n")
+cat("╚══════════════════════════════════════════════════════════════════╝\n\n")
 
-# ============================================================================
-# 1. CHARGEMENT DE LA CONFIGURATION
-# ============================================================================
+# ==============================================================================
+# 1. LOAD CONFIGURATION
+# ==============================================================================
 
-cat("═══ 1. CHARGEMENT DE LA CONFIGURATION ═══\n\n")
+cat("═══ 1. LOAD CONFIGURATION ═══\n\n")
 
 config_file <- "knox_config.R"
 if (!file.exists(config_file)) {
   stop(
-    "Fichier de configuration '", config_file, "' introuvable!\n\n",
-    "Créez le fichier knox_config.R avec:\n",
-    "  KNOX_USERNAME <- 'votre_username'\n",
-    "  KNOX_PASSWORD <- 'votre_password'\n",
-    "  KNOX_WEBHDFS_URL <- 'https://hostname_knox:port_knox/gateway/cdp-proxy-api/webhdfs/v1'\n"
+    "Configuration file '", config_file, "' not found!\n\n",
+    "Create the knox_config.R file with:\n",
+    "  KNOX_USERNAME <- 'your_username'\n",
+    "  KNOX_PASSWORD <- 'your_password'\n",
+    "  KNOX_WEBHDFS_URL <- 'https://knox_hostname:knox_port/gateway/cdp-proxy-api/webhdfs/v1'\n"
   )
 }
 
 source(config_file)
 
-# Vérifications
+# Checks
 if (!exists("KNOX_USERNAME") || !exists("KNOX_PASSWORD")) {
-  stop("KNOX_USERNAME et KNOX_PASSWORD doivent être définis dans knox_config.R")
+  stop("KNOX_USERNAME and KNOX_PASSWORD must be defined in knox_config.R")
 }
 
 if (!exists("KNOX_WEBHDFS_URL")) {
-  stop("KNOX_WEBHDFS_URL doit être défini dans knox_config.R\n",
-       "Exemple: KNOX_WEBHDFS_URL <- 'https://hostname:port/gateway/cdp-proxy-api/webhdfs/v1'")
+  stop("KNOX_WEBHDFS_URL must be defined in knox_config.R\n",
+       "Example: KNOX_WEBHDFS_URL <- 'https://hostname:port/gateway/cdp-proxy-api/webhdfs/v1'")
 }
 
-cat("✓ Configuration chargée\n")
+cat("✓ Configuration loaded\n")
 cat("  Username:", KNOX_USERNAME, "\n")
 cat("  WebHDFS URL:", KNOX_WEBHDFS_URL, "\n\n")
 
-# ============================================================================
-# 2. PARAMÈTRES DU JAR
-# ============================================================================
+# ==============================================================================
+# 2. JAR PARAMETERS
+# ==============================================================================
 
-cat("═══ 2. PARAMÈTRES DU JAR ═══\n\n")
+cat("═══ 2. JAR PARAMETERS ═══\n\n")
 
-# Version de sparklyr installée
-sparklyr_version <- packageVersion("sparklyr")
-cat("Version sparklyr installée:", as.character(sparklyr_version), "\n")
+# Detect Spark version from the Livy URL or use default
+spark_version <- "3.0"  # Default for CDP 7.1.9
+scala_version <- "2.12"
 
-# Choix de la version Spark (dépend de votre cluster)
-SPARK_VERSION <- "3.0"  # Changez si nécessaire : "3.0", "3.3", "3.5", "4.0"
-SCALA_VERSION <- "2.12"
-
-# Nom du JAR
-jar_filename <- sprintf("sparklyr-%s-%s.jar", SPARK_VERSION, SCALA_VERSION)
-cat("Nom du JAR:", jar_filename, "\n")
-
-# Chemin HDFS de destination
-hdfs_dir <- sprintf("/user/%s", KNOX_USERNAME)
-hdfs_jar_path <- sprintf("%s/%s", hdfs_dir, jar_filename)
-cat("Destination HDFS:", hdfs_jar_path, "\n\n")
-
-# ============================================================================
-# 3. VÉRIFICATION SI LE JAR EXISTE DÉJÀ
-# ============================================================================
-
-cat("═══ 3. VÉRIFICATION SUR HDFS ═══\n\n")
-
-webhdfs_check_url <- sprintf(
-  "%s%s?op=GETFILESTATUS&user.name=%s",
-  KNOX_WEBHDFS_URL,
-  hdfs_jar_path,
-  KNOX_USERNAME
-)
-
-auth <- paste0(KNOX_USERNAME, ":", KNOX_PASSWORD)
-auth_escaped <- gsub("'", "'\\''", auth)
-
-check_cmd <- sprintf(
-  "curl -s -k -u '%s' '%s'",
-  auth_escaped,
-  webhdfs_check_url
-)
-
-check_result <- system(check_cmd, intern = TRUE, ignore.stderr = TRUE)
-
-if (length(check_result) > 0) {
-  check_json <- tryCatch(
-    fromJSON(paste(check_result, collapse = "\n")),
-    error = function(e) NULL
-  )
-  
-  if (!is.null(check_json) && !is.null(check_json$FileStatus)) {
-    file_size <- check_json$FileStatus$length
-    cat("✓ JAR déjà présent sur HDFS\n")
-    cat("  Taille:", round(file_size / 1024 / 1024, 2), "Mo\n\n")
-    
-    response <- readline("Le JAR existe déjà. Voulez-vous le remplacer? (o/N): ")
-    if (tolower(response) != "o") {
-      cat("\n✓ Utilisation du JAR existant\n")
-      cat("\nAjoutez cette ligne dans knox_config.R si pas déjà fait:\n")
-      cat("  SPARKLYR_JAR_PATH <- 'hdfs://", hdfs_jar_path, "'\n\n", sep = "")
-      quit(save = "no")
-    }
-  }
+# Try to detect from KNOX_MASTER_URL if it contains version info
+if (exists("KNOX_MASTER_URL") && grepl("spark3", KNOX_MASTER_URL, ignore.case = TRUE)) {
+  spark_version <- "3.0"
+  cat("✓ Detected Spark 3.x from URL\n")
+} else if (exists("KNOX_MASTER_URL") && grepl("spark2", KNOX_MASTER_URL, ignore.case = TRUE)) {
+  spark_version <- "2.4"
+  cat("✓ Detected Spark 2.x from URL\n")
+} else {
+  cat("! Using default Spark version:", spark_version, "\n")
 }
 
-cat("→ Le JAR n'existe pas encore ou sera remplacé\n\n")
+jar_filename <- paste0("sparklyr-", spark_version, "-", scala_version, ".jar")
+cat("  JAR filename:", jar_filename, "\n")
 
-# ============================================================================
-# 4. RÉCUPÉRATION DU JAR EN LOCAL
-# ============================================================================
+# HDFS target directory
+hdfs_target_dir <- paste0("/user/", KNOX_USERNAME, "/sparklyr")
+cat("  Target HDFS directory:", hdfs_target_dir, "\n")
 
-cat("═══ 4. RÉCUPÉRATION DU JAR ═══\n\n")
+hdfs_jar_path <- paste0("hdfs://", hdfs_target_dir, "/", jar_filename)
+cat("  Full HDFS path:", hdfs_jar_path, "\n\n")
 
-local_jar_path <- tempfile(fileext = ".jar")
+# ==============================================================================
+# 3. FIND LOCAL JAR
+# ==============================================================================
 
-# Option 1 : Essayer de récupérer depuis l'installation de sparklyr
-system_jar <- system.file(
-  "java",
-  jar_filename,
-  package = "sparklyr"
-)
+cat("═══ 3. FIND LOCAL JAR ═══\n\n")
 
-if (file.exists(system_jar) && file.size(system_jar) > 0) {
-  cat("✓ JAR trouvé dans l'installation sparklyr\n")
-  cat("  Chemin:", system_jar, "\n")
-  file.copy(system_jar, local_jar_path)
-  cat("✓ Copie locale créée\n\n")
+# Try to find the JAR in the local sparklyr installation
+sparklyr_path <- system.file(package = "sparklyr")
+local_jar_path <- file.path(sparklyr_path, "java", jar_filename)
+
+if (file.exists(local_jar_path)) {
+  cat("✓ JAR found in sparklyr installation:\n")
+  cat("  ", local_jar_path, "\n")
+  jar_source <- local_jar_path
 } else {
-  # Option 2 : Télécharger depuis GitHub
-  cat("→ JAR non trouvé localement, téléchargement depuis GitHub...\n")
+  cat("✗ JAR not found in sparklyr installation\n")
+  cat("  Searching in:", sparklyr_path, "/java/\n")
   
-  # Déterminer la bonne version
-  github_version <- as.character(sparklyr_version)
-  if (grepl("^1\\.8", github_version)) {
-    github_tag <- "v1.8.5"
-  } else if (grepl("^1\\.9", github_version)) {
-    github_tag <- "v1.9.0"
-  } else {
-    github_tag <- paste0("v", github_version)
+  # List available JARs
+  java_dir <- file.path(sparklyr_path, "java")
+  if (dir.exists(java_dir)) {
+    available_jars <- list.files(java_dir, pattern = "\\.jar$", recursive = FALSE)
+    if (length(available_jars) > 0) {
+      cat("  Available JARs:\n")
+      for (jar in available_jars) {
+        cat("    -", jar, "\n")
+      }
+    }
   }
   
-  github_url <- sprintf(
-    "https://github.com/sparklyr/sparklyr/releases/download/%s/%s",
-    github_tag,
+  # Try alternative: download from GitHub if no JAR found
+  cat("\n  Attempting to download from GitHub...\n")
+  temp_jar <- tempfile(fileext = ".jar")
+  github_url <- paste0(
+    "https://github.com/sparklyr/sparklyr/releases/download/v1.8.5/",
     jar_filename
   )
   
-  cat("  URL:", github_url, "\n")
-  
-  download_cmd <- sprintf(
-    "curl -L -o '%s' '%s'",
-    local_jar_path,
-    github_url
-  )
-  
-  result <- system(download_cmd, ignore.stderr = FALSE)
-  
-  if (result != 0 || !file.exists(local_jar_path) || file.size(local_jar_path) == 0) {
-    unlink(local_jar_path)
+  tryCatch({
+    download.file(github_url, temp_jar, method = "curl", quiet = FALSE)
+    if (file.exists(temp_jar) && file.size(temp_jar) > 1000) {
+      cat("✓ JAR downloaded from GitHub\n")
+      jar_source <- temp_jar
+    } else {
+      stop("Downloaded file is empty or invalid")
+    }
+  }, error = function(e) {
     stop(
-      "Échec du téléchargement depuis GitHub.\n\n",
-      "Solutions:\n",
-      "1. Téléchargez manuellement le JAR depuis:\n",
-      "   ", github_url, "\n",
-      "2. Placez-le dans le répertoire courant\n",
-      "3. Relancez ce script\n"
+      "Failed to find or download JAR!\n",
+      "  - Not found in sparklyr installation: ", local_jar_path, "\n",
+      "  - Failed to download from: ", github_url, "\n",
+      "  Error: ", conditionMessage(e), "\n\n",
+      "Please:\n",
+      "  1. Check your sparklyr installation\n",
+      "  2. Or manually download the JAR and specify its path\n",
+      "  3. Or install sparklyr version that includes this JAR\n"
     )
-  }
-  
-  cat("✓ Téléchargement réussi\n\n")
+  })
 }
 
-jar_size <- file.size(local_jar_path)
-cat("Taille du JAR:", round(jar_size / 1024 / 1024, 2), "Mo\n\n")
+cat("  JAR size:", round(file.size(jar_source) / 1024 / 1024, 2), "MB\n\n")
 
-# ============================================================================
-# 5. CRÉATION DU RÉPERTOIRE HDFS
-# ============================================================================
+# ==============================================================================
+# 4. CREATE HDFS DIRECTORY
+# ==============================================================================
 
-cat("═══ 5. CRÉATION DU RÉPERTOIRE HDFS ═══\n\n")
+cat("═══ 4. CREATE HDFS DIRECTORY ═══\n\n")
 
-webhdfs_mkdir_url <- sprintf(
-  "%s%s?op=MKDIRS&user.name=%s",
+# Create directory via WebHDFS (MKDIRS operation)
+webhdfs_create_dir_url <- paste0(
   KNOX_WEBHDFS_URL,
-  hdfs_dir,
-  KNOX_USERNAME
+  hdfs_target_dir,
+  "?op=MKDIRS"
 )
 
-mkdir_cmd <- sprintf(
-  "curl -s -k -u '%s' -X PUT '%s'",
-  auth_escaped,
-  webhdfs_mkdir_url
+create_dir_cmd <- sprintf(
+  'curl -k -u "%s:%s" -X PUT "%s"',
+  KNOX_USERNAME,
+  KNOX_PASSWORD,
+  webhdfs_create_dir_url
 )
 
-mkdir_result <- system(mkdir_cmd, intern = TRUE, ignore.stderr = TRUE)
-cat("✓ Répertoire HDFS vérifié/créé:", hdfs_dir, "\n\n")
+cat("Creating directory on HDFS...\n")
+create_result <- system(create_dir_cmd, intern = TRUE)
 
-# ============================================================================
-# 6. UPLOAD DU JAR VIA WEBHDFS
-# ============================================================================
-
-cat("═══ 6. UPLOAD DU JAR VIA WEBHDFS ═══\n\n")
-
-cat("Cette opération peut prendre quelques minutes...\n")
-
-# Étape 1 : Obtenir l'URL de redirection
-webhdfs_create_url <- sprintf(
-  "%s%s?op=CREATE&user.name=%s&overwrite=true",
-  KNOX_WEBHDFS_URL,
-  hdfs_jar_path,
-  KNOX_USERNAME
-)
-
-redirect_cmd <- sprintf(
-  "curl -s -k -i -u '%s' -X PUT '%s' 2>&1 | grep -i '^Location:' | cut -d' ' -f2 | tr -d '\\r'",
-  auth_escaped,
-  webhdfs_create_url
-)
-
-redirect_url <- system(redirect_cmd, intern = TRUE)
-
-if (length(redirect_url) == 0 || redirect_url == "") {
-  # Fallback : upload direct sans suivre la redirection
-  cat("→ Upload direct (sans redirection)\n")
-  
-  upload_cmd <- sprintf(
-    "curl -s -k -u '%s' -X PUT -T '%s' '%s'",
-    auth_escaped,
-    local_jar_path,
-    webhdfs_create_url
-  )
-} else {
-  cat("→ Upload vers:", redirect_url, "\n")
-  
-  upload_cmd <- sprintf(
-    "curl -s -k -u '%s' -X PUT -T '%s' '%s'",
-    auth_escaped,
-    local_jar_path,
-    redirect_url
-  )
-}
-
-upload_result <- system(upload_cmd, intern = TRUE, ignore.stderr = TRUE)
-
-cat("✓ Upload terminé\n\n")
-
-# Nettoyage du fichier temporaire
-unlink(local_jar_path)
-
-# ============================================================================
-# 7. VÉRIFICATION DE L'UPLOAD
-# ============================================================================
-
-cat("═══ 7. VÉRIFICATION DE L'UPLOAD ═══\n\n")
-
-Sys.sleep(2)  # Attendre la propagation
-
-verify_result <- system(check_cmd, intern = TRUE, ignore.stderr = TRUE)
-verify_json <- tryCatch(
-  fromJSON(paste(verify_result, collapse = "\n")),
-  error = function(e) NULL
-)
-
-if (!is.null(verify_json) && !is.null(verify_json$FileStatus)) {
-  uploaded_size <- verify_json$FileStatus$length
-  cat("✓ JAR vérifié sur HDFS\n")
-  cat("  Chemin:", hdfs_jar_path, "\n")
-  cat("  Taille:", round(uploaded_size / 1024 / 1024, 2), "Mo\n\n")
-  
-  if (uploaded_size != jar_size) {
-    warning("⚠ Différence de taille détectée (local vs HDFS)")
+tryCatch({
+  result_json <- fromJSON(paste(create_result, collapse = ""))
+  if (!is.null(result_json$boolean) && result_json$boolean == TRUE) {
+    cat("✓ Directory created or already exists\n\n")
+  } else {
+    cat("! Warning: Unexpected response from MKDIRS:\n")
+    cat(paste(create_result, collapse = "\n"), "\n\n")
   }
-} else {
-  stop("⚠ Impossible de vérifier l'upload. Vérifiez manuellement avec WebHDFS.")
+}, error = function(e) {
+  cat("! Warning: Could not parse MKDIRS response\n")
+  cat("  Response:", paste(create_result, collapse = "\n"), "\n\n")
+})
+
+# ==============================================================================
+# 5. UPLOAD JAR TO HDFS
+# ==============================================================================
+
+cat("═══ 5. UPLOAD JAR TO HDFS ═══\n\n")
+
+# Step 1: Get redirect location (CREATE operation)
+webhdfs_upload_url <- paste0(
+  KNOX_WEBHDFS_URL,
+  hdfs_target_dir, "/", jar_filename,
+  "?op=CREATE&overwrite=true"
+)
+
+cat("Getting upload location...\n")
+get_location_cmd <- sprintf(
+  'curl -k -i -u "%s:%s" -X PUT "%s" 2>&1 | grep -i "^Location:" | cut -d" " -f2 | tr -d "\\r\\n"',
+  KNOX_USERNAME,
+  KNOX_PASSWORD,
+  webhdfs_upload_url
+)
+
+upload_location <- system(get_location_cmd, intern = TRUE)
+
+if (length(upload_location) == 0 || upload_location == "") {
+  stop(
+    "Failed to get upload location from WebHDFS!\n",
+    "  URL used: ", webhdfs_upload_url, "\n",
+    "  Please check:\n",
+    "    - KNOX_WEBHDFS_URL is correct\n",
+    "    - Knox credentials are valid\n",
+    "    - WebHDFS service is accessible through Knox\n"
+  )
 }
 
-# ============================================================================
-# 8. MISE À JOUR DE LA CONFIGURATION
-# ============================================================================
+cat("✓ Upload location obtained\n")
+cat("  Location:", upload_location, "\n\n")
 
-cat("═══ 8. MISE À JOUR DE LA CONFIGURATION ═══\n\n")
+# Step 2: Upload file to the redirect location
+cat("Uploading JAR (this may take a few moments)...\n")
+upload_cmd <- sprintf(
+  'curl -k -u "%s:%s" -X PUT -T "%s" "%s"',
+  KNOX_USERNAME,
+  KNOX_PASSWORD,
+  jar_source,
+  upload_location
+)
 
-hdfs_full_path <- sprintf("hdfs://%s", hdfs_jar_path)
+upload_result <- system(upload_cmd, intern = TRUE)
+upload_exit_code <- attr(upload_result, "status")
 
-cat("Ajoutez cette ligne dans knox_config.R:\n\n")
-cat("  SPARKLYR_JAR_PATH <- '", hdfs_full_path, "'\n\n", sep = "")
+if (is.null(upload_exit_code) || upload_exit_code == 0) {
+  cat("✓ JAR successfully uploaded to HDFS\n")
+  cat("  HDFS path:", hdfs_jar_path, "\n\n")
+} else {
+  stop(
+    "JAR upload failed!\n",
+    "  Exit code: ", upload_exit_code, "\n",
+    "  Response: ", paste(upload_result, collapse = "\n"), "\n"
+  )
+}
 
-# Vérifier si knox_config.R a déjà SPARKLYR_JAR_PATH
+# ==============================================================================
+# 6. UPDATE CONFIGURATION FILE
+# ==============================================================================
+
+cat("═══ 6. UPDATE CONFIGURATION FILE ═══\n\n")
+
+# Update knox_config.R with the JAR path
 config_content <- readLines(config_file)
-has_jar_path <- any(grepl("SPARKLYR_JAR_PATH", config_content))
 
-if (!has_jar_path) {
-  response <- readline("Voulez-vous que je l'ajoute automatiquement? (O/n): ")
-  if (tolower(response) != "n") {
-    cat(sprintf("\n# Chemin du JAR sparklyr sur HDFS\nSPARKLYR_JAR_PATH <- '%s'\n", hdfs_full_path),
-        file = config_file, append = TRUE)
-    cat("✓ Configuration mise à jour automatiquement\n\n")
-  }
+# Find and update SPARKLYR_JAR_PATH line
+jar_path_pattern <- "^SPARKLYR_JAR_PATH\\s*<-"
+jar_path_line_idx <- grep(jar_path_pattern, config_content)
+
+if (length(jar_path_line_idx) > 0) {
+  # Update existing line
+  config_content[jar_path_line_idx[1]] <- sprintf('SPARKLYR_JAR_PATH <- "%s"', hdfs_jar_path)
+  cat("✓ Updated existing SPARKLYR_JAR_PATH in", config_file, "\n")
 } else {
-  cat("⚠ SPARKLYR_JAR_PATH existe déjà dans knox_config.R\n")
-  cat("  Mettez-le à jour manuellement si nécessaire\n\n")
+  # Add new line at the end
+  config_content <- c(
+    config_content,
+    "",
+    "# SPARKLYR JAR PATH (configured by setup_jar.R)",
+    sprintf('SPARKLYR_JAR_PATH <- "%s"', hdfs_jar_path)
+  )
+  cat("✓ Added SPARKLYR_JAR_PATH to", config_file, "\n")
 }
 
-# ============================================================================
-# 9. RÉSUMÉ ET PROCHAINES ÉTAPES
-# ============================================================================
+# Write updated configuration
+writeLines(config_content, config_file)
 
-cat("╔═══════════════════════════════════════════════════════════════════╗\n")
-cat("║                  INSTALLATION RÉUSSIE !                           ║\n")
-cat("╚═══════════════════════════════════════════════════════════════════╝\n\n")
+cat("  JAR path saved:", hdfs_jar_path, "\n\n")
 
-cat("Résumé:\n")
-cat("  ✓ JAR téléchargé:", jar_filename, "\n")
-cat("  ✓ Upload sur HDFS:", hdfs_jar_path, "\n")
-cat("  ✓ Configuration:", config_file, "\n\n")
+# ==============================================================================
+# COMPLETION
+# ==============================================================================
 
-cat("Prochaines étapes:\n")
-cat("  1. Vérifiez que SPARKLYR_JAR_PATH est dans knox_config.R\n")
-cat("  2. Lancez la connexion Spark:\n")
-cat("       source('knox_debug_full_en.R')\n")
-cat("  3. Testez avec les exemples:\n")
-cat("       source('exemples_sparklyr.R')\n\n")
+cat("╔══════════════════════════════════════════════════════════════════╗\n")
+cat("║                    INSTALLATION COMPLETE                         ║\n")
+cat("╚══════════════════════════════════════════════════════════════════╝\n\n")
 
-cat("═══════════════════════════════════════════════════════════════════\n\n")
+cat("Next steps:\n")
+cat("  1. Verify JAR path in knox_config.R\n")
+cat("  2. Connect to Spark: source('sparklyr_connection.R')\n")
+cat("  3. Test with examples: source('examples/basic_examples.R')\n\n")
+
+cat("✓ JAR installed at:", hdfs_jar_path, "\n\n")
+
+# Cleanup temporary file if used
+if (exists("temp_jar") && file.exists(temp_jar)) {
+  unlink(temp_jar)
+}
