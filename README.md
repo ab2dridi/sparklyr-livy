@@ -77,7 +77,7 @@ spark_disconnect(sc)
 - `examples/basic_examples.R` - Usage examples
 - `PROBLEM.md` - Detailed technical analysis
 - `INSTALLATION.md` - Step-by-step installation guide
-- `docs/` - Additional documentation
+
 
 ## Configuration Example
 
@@ -108,7 +108,7 @@ No modifications to sparklyr source code required.
 
 **Connection fails:** Reduce resources in `knox_config.R` (e.g., `SPARK_NUM_EXECUTORS <- 1`)
 
-**JAR upload fails:** See `docs/manual_jar_install.md` for manual HDFS upload
+**JAR upload fails:** See `manual_jar_install.md` for manual HDFS upload
 
 **More details:** See `PROBLEM.md` and `INSTALLATION.md`
 

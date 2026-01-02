@@ -258,7 +258,7 @@ Do you want me to add it automatically? (Y/n): Y
 
 #### 4.2 Manual Installation (If WebHDFS Fails)
 
-If the automated script fails, see [docs/manual_jar_install.md](docs/manual_jar_install.md) for manual installation instructions.
+If the automated script fails, see [manual_jar_install.md](manual_jar_install.md) for manual installation instructions.
 
 **Quick manual method:**
 ```bash
@@ -525,7 +525,7 @@ source("setup_jar.R")
 2. Insufficient resources
 3. JAR not found on HDFS
 
-**Solution:** Check the complete logs displayed by `sparklyr_connection.R` and see [docs/troubleshooting.md](docs/troubleshooting.md).
+**Solution:** Check the complete logs displayed by `sparklyr_connection.R` and see [PROBLEM.md](PROBLEM.md).
 
 ---
 
@@ -534,8 +534,8 @@ source("setup_jar.R")
 You have successfully installed sparklyr-livy! Next steps:
 
 1. **Learn:** Review the [examples/](examples/) directory
-2. **Explore:** Try [docs/spark_versions.md](docs/spark_versions.md) for version details
-3. **Troubleshoot:** Bookmark [docs/troubleshooting.md](docs/troubleshooting.md)
+2. **Explore:** Try [README.md](README.md) for version details
+3. **Troubleshoot:** Bookmark [PROBLEM.md](PROBLEM.md)
 4. **Share:** Help your colleagues install using this guide
 
 ---
