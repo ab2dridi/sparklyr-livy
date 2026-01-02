@@ -1,0 +1,21 @@
+# Configuration avec credentials (NE PAS COMMITTER)
+knox_config.R
+
+# Historique R
+.Rhistory
+.RData
+.Rproj.user
+
+# Fichiers temporaires
+*.tmp
+*.log
+*.rds
+
+# Répertoires de cache
+.cache/
+__pycache__/
+
+# Environnement R
+.Renviron
+.Rprofile
+knox_config.R
