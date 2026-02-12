@@ -81,44 +81,60 @@ cat("═════════════════════════
 # CURL FUNCTION WITH DEBUG
 # ============================================================================
 
+
 livy_curl_request <- function(url, username, password, method = "GET", body = NULL, debug = FALSE) {
   auth <- paste0(username, ":", password)
-  auth_escaped <- gsub("'", "'\\''", auth)
   
+  # Create temp file for auth if needed (extra safety)
   if (method == "GET") {
-    cmd <- sprintf("curl -s -k -u '%s' '%s'", auth_escaped, url)
-  } else if (method == "POST") {
-    if (!is.null(body) && body != "" && body != "{}") {
-      body_escaped <- gsub("'", "'\\''", body)
-      cmd <- sprintf(
-        "curl -s -k -u '%s' -X POST -H 'Content-Type: application/json' -d '%s' '%s'",
-        auth_escaped, body_escaped, url
-      )
-      if (debug) {
-        cat("Body JSON:\n", body, "\n\n")
-      }
+    cmd <- sprintf("curl -s -k -u '%s' '%s'", 
+                   gsub("'", "'\\''", auth), url)
+    result <- system(cmd, intern = TRUE, ignore.stderr = FALSE)
+  } else {
+    # For POST/DELETE, always use temp file
+    body_file <- tempfile(fileext = ".json")
+    
+    if (is.null(body) || body == "" || body == "{}") {
+      body_to_write <- "{}"
     } else {
-      cmd <- sprintf(
-        "curl -s -k -u '%s' -X POST -H 'Content-Type: application/json' -d '{}' '%s'",
-        auth_escaped, url
-      )
+      body_to_write <- body
     }
-  } else if (method == "DELETE") {
-    cmd <- sprintf("curl -s -k -u '%s' -X DELETE '%s'", auth_escaped, url)
+    
+    # Write with explicit encoding
+    writeLines(body_to_write, body_file, useBytes = FALSE)
+    
+    if (method == "POST") {
+      cmd <- sprintf(
+        "curl -s -k -u '%s' -X POST -H 'Content-Type: application/json' --data-binary @%s '%s'",
+        gsub("'", "'\\''", auth), body_file, url
+      )
+    } else if (method == "DELETE") {
+      cmd <- sprintf("curl -s -k -u '%s' -X DELETE '%s'", 
+                     gsub("'", "'\\''", auth), url)
+    }
+    
+    if (debug) {
+      cat("Body size:", nchar(body_to_write), "bytes\n")
+      cat("Command:", cmd, "\n\n")
+    }
+    
+    result <- tryCatch({
+      system(cmd, intern = TRUE, ignore.stderr = FALSE)
+    }, finally = {
+      if (file.exists(body_file)) unlink(body_file)
+    })
   }
   
-  result <- system(cmd, intern = TRUE, ignore.stderr = FALSE)
-  
+  # Parse response (same as before)
   if (length(result) == 0 || all(result == "")) {
     return(list())
   }
   
   tryCatch({
-    parsed <- fromJSON(paste(result, collapse = "\n"))
-    return(parsed)
+    jsonlite::fromJSON(paste(result, collapse = "\n"))
   }, error = function(e) {
-    warning("JSON parsing error: ", e$message)
-    return(list())
+    warning("JSON parse error: ", e$message)
+    list()
   })
 }
 
